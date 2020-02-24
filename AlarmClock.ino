@@ -1,15 +1,13 @@
 #include <Adafruit_NeoPixel.h>
 #include <ESP8266WiFi.h>
-#include <DNSServer.h>
-#include <ESP8266WebServer.h>
-#include <WiFiManager.h>
-#include <ESP8266mDNS.h>
 #include <TimeLib.h>
 #include <NtpClientLib.h>
 
 // Led strip
 #define LED_PIN 14
 #define LED_COUNT 8
+#define WLAN_SSID "YourWifi"
+#define WLAN_PASSWD "YourPassword"
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRBW + NEO_KHZ800);
 
 // Timing
@@ -44,6 +42,11 @@ String getValue(String data, char separator, int index)
 
 void setup() 
 {
+  Serial.begin(9600);
+  while(!Serial) { }
+  Serial.println();
+  Serial.println("ESP8266 in normal mode");
+
   // NeoPixel strip - setup plus turn off
   strip.begin();          
   strip.setBrightness(1); // 1-255
@@ -64,10 +67,19 @@ void setup()
   digitalWrite(LED_BUILTIN, HIGH);
 
   // Connect to wifi
-  Serial.begin(9600);
   Serial.println("Connecting...");
-  WiFiManager wifiManager;
-  wifiManager.autoConnect("BudikAP");
+  WiFi.forceSleepWake();
+  delay( 1 );
+  WiFi.persistent( false );
+  WiFi.mode( WIFI_STA );
+  WiFi.begin( WLAN_SSID, WLAN_PASSWD );
+
+  while (WiFi.status() != WL_CONNECTED) 
+  {
+     delay(500);
+     Serial.print("*");
+  }
+  Serial.println();
  
   // Get time
   NTP.begin("pool.ntp.org", timeZone, true);
@@ -81,85 +93,95 @@ void setup()
 
   // Calculate remaining time
   unsigned long timeToStart = 0;
+  Serial.print("Time to start: ");
   if(hours > timeToStartHours)
   {
-    timeToStart = (24 - hours + timeToStartHours) * 60 * 60 * 1000;
+    timeToStart = (23 - hours + timeToStartHours) * 60 * 60 * 1000;
+    Serial.print(23 - hours + timeToStartHours);
   }
   else
   {
     timeToStart = (timeToStartHours - hours) * 60 * 60 * 1000;
+    Serial.print(timeToStartHours - hours);
   }
+  Serial.print("h ");
 
   if(minutes > timeToStartMinutes)
   {
     timeToStart += (60 - minutes + timeToStartMinutes) * 60 * 1000;
+    Serial.print(60 - minutes + timeToStartMinutes);
   }
   else
   {
     timeToStart += (timeToStartMinutes - minutes) * 60 * 1000;
+    Serial.print(timeToStartMinutes - minutes);
   }
-  
-  Serial.print("Time to start: ");
-  Serial.print((23 - hours + timeToStartHours));
-  Serial.print("h ");
-  Serial.print(60 - minutes + timeToStartMinutes);
   Serial.println("m");
 
-  // Blink LEDs
-  for(int i = 0; i < LED_COUNT; i++)
+  if(timeToStart > 60 * 1000)
   {
-    strip.setPixelColor(i, strip.Color(0,   255,   0));
-  }
-  strip.show();
-  
-  delay(1000);
-  
-  for(int i = 0; i < LED_COUNT; i++)
-  {
-    strip.setPixelColor(i, strip.Color(0,   0,   0));
-  }
-  strip.show();
+    // Blink LEDs
+    strip.setPixelColor(0, strip.Color(255,   0,   0));
+    strip.show();
+    
+    delay(3000);
+    
+    strip.setPixelColor(0, strip.Color(0,   0,   0));
+    strip.show();
 
-  // Start waiting
-  wait(timeToStart);
-
-  for(int round = 0; round < 4; round++)
+    WiFi.disconnect( true );
+    delay( 1 );
+    
+    Serial.println("Going deep sleep");
+    ESP.deepSleep(timeToStart * 1000 - 1000 * 1000 * 60 );
+  }
+  else
   {
-    for(int step = 0; step < LED_COUNT; step++)
+    // When wait time is under one minute, do not go deepSleep again, just wait
+    WiFi.disconnect( true );
+    delay( 1 );
+
+    Serial.println("Standard waiting");
+    wait(timeToStart);
+
+    for(int round = 0; round < 4; round++)
     {
-      for(int i = 0; i < LED_COUNT; i++)
+      for(int step = 0; step < LED_COUNT; step++)
       {
-        if(step < i)
+        for(int i = 0; i < LED_COUNT; i++)
         {
-          strip.setPixelColor(i, strip.Color(0,   0,   0));
+          if(step < i)
+          {
+            strip.setPixelColor(i, strip.Color(0,   0,   0));
+          }
+          else if (round == 0)
+          {
+            strip.setPixelColor(i, strip.Color(0,   0,   255));
+          }
+          else if (round == 1)
+          {
+            strip.setPixelColor(i, strip.Color(255,   0,   255));
+          }
+          else if (round == 2)
+          {
+            strip.setPixelColor(i, strip.Color(255,   140,   0));
+          }
+          else if (round == 3)
+          {
+            strip.setPixelColor(i, strip.Color(255,   0,   0));
+          }
         }
-        else if (round == 0)
-        {
-          strip.setPixelColor(i, strip.Color(0,   0,   255));
-        }
-        else if (round == 1)
-        {
-          strip.setPixelColor(i, strip.Color(255,   0,   255));
-        }
-        else if (round == 2)
-        {
-          strip.setPixelColor(i, strip.Color(255,   140,   0));
-        }
-        else if (round == 3)
-        {
-          strip.setPixelColor(i, strip.Color(255,   0,   0));
-        }
+        strip.show();
+        wait(wakeUpDuration / (4 * LED_COUNT));
       }
-      strip.show();
-      wait(wakeUpDuration / (4 * LED_COUNT));
     }
-  }
 
-  for(int i = 0; i < LED_COUNT; i++)
-  {
-    strip.setPixelColor(i, strip.Color(0,   255,   0));
+    for(int i = 0; i < LED_COUNT; i++)
+    {
+      strip.setPixelColor(i, strip.Color(0,   255,   0));
+    }
+    strip.show();
   }
-  strip.show();
 }
 
 void loop()
