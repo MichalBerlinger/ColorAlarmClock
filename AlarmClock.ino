@@ -12,15 +12,15 @@ Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRBW + NEO_KHZ800);
 
 // Timing
 int8_t timeZone = 1; // we are in time zone 1
-int timeToStartHours = 5; // 5am
-int timeToStartMinutes = 0;
-unsigned long wakeUpDuration = 1 * 60 * 60 * 1000; // hours * minutes * seconds * milis
+int timeToStartHours = 5; // 5:08am
+int timeToStartMinutes = 8;
+uint64_t wakeUpDuration = 1 * 60 * 60 * 1000; // hours * minutes * seconds * milis
 
-void wait(unsigned long period)
+void wait(uint64_t period)
 {
     int time_now = millis();
     while(millis() < (time_now + period)){
-        delay(1);
+        delay(1000);
     }
 }
 
@@ -92,17 +92,21 @@ void setup()
   int minutes = getValue(NTP.getTimeStr(), ':', 1).toInt();
 
   // Calculate remaining time
-  unsigned long timeToStart = 0;
+  uint64_t timeToStart = 0;
   Serial.print("Time to start: ");
   if(hours > timeToStartHours)
   {
     timeToStart = (23 - hours + timeToStartHours) * 60 * 60 * 1000;
     Serial.print(23 - hours + timeToStartHours);
   }
+  else if (hours == timeToStartHours)
+  {
+    Serial.print(0);
+  }
   else
   {
-    timeToStart = (timeToStartHours - hours) * 60 * 60 * 1000;
-    Serial.print(timeToStartHours - hours);
+    timeToStart = (timeToStartHours - hours - 1) * 60 * 60 * 1000;
+    Serial.print(timeToStartHours - hours - 1);
   }
   Serial.print("h ");
 
@@ -111,14 +115,18 @@ void setup()
     timeToStart += (60 - minutes + timeToStartMinutes) * 60 * 1000;
     Serial.print(60 - minutes + timeToStartMinutes);
   }
+  else if (minutes == timeToStartMinutes)
+  {
+    Serial.print(0);
+  }
   else
   {
-    timeToStart += (timeToStartMinutes - minutes) * 60 * 1000;
-    Serial.print(timeToStartMinutes - minutes);
+    timeToStart += (timeToStartMinutes - minutes - 1) * 60 * 1000;
+    Serial.print(timeToStartMinutes - minutes - 1);
   }
   Serial.println("m");
 
-  if(timeToStart > 60 * 1000)
+  if(timeToStart > 3 * 60 * 1000)
   {
     // Blink LEDs
     strip.setPixelColor(0, strip.Color(255,   0,   0));
@@ -133,11 +141,11 @@ void setup()
     delay( 1 );
     
     Serial.println("Going deep sleep");
-    ESP.deepSleep(timeToStart * 1000 - 1000 * 1000 * 60 );
+    ESP.deepSleep(timeToStart * 1000 - 1000 * 1000 * 60 * 3);
   }
   else
   {
-    // When wait time is under one minute, do not go deepSleep again, just wait
+    // When wait time is under three minutes, do not go deepSleep again, just wait
     WiFi.disconnect( true );
     delay( 1 );
 
