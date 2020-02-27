@@ -12,8 +12,8 @@ Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRBW + NEO_KHZ800);
 
 // Timing
 int8_t timeZone = 1; // we are in time zone 1
-int timeToStartHours = 5; // 5:08am
-int timeToStartMinutes = 8;
+int timeToStartHours = 5; // 5am
+int timeToStartMinutes = 4;
 uint64_t wakeUpDuration = 1 * 60 * 60 * 1000; // hours * minutes * seconds * milis
 
 void wait(uint64_t period)
@@ -90,42 +90,24 @@ void setup()
   // Current hour and minutes
   int hours = getValue(NTP.getTimeStr(), ':', 0).toInt();
   int minutes = getValue(NTP.getTimeStr(), ':', 1).toInt();
+  unsigned long millis = hours * 60 * 60 * 1000 + minutes * 60 * 1000;
+  unsigned long timeToStartMillis = timeToStartHours * 60 * 60 * 1000 + timeToStartMinutes * 60 * 1000;
 
   // Calculate remaining time
-  uint64_t timeToStart = 0;
+  unsigned long timeToStart = 0;
   Serial.print("Time to start: ");
-  if(hours > timeToStartHours)
+  
+  if(millis > timeToStartMillis)
   {
-    timeToStart = (23 - hours + timeToStartHours) * 60 * 60 * 1000;
-    Serial.print(23 - hours + timeToStartHours);
-  }
-  else if (hours == timeToStartHours)
-  {
-    Serial.print(0);
+    timeToStart = 24 * 60 * 60 * 1000 - millis + timeToStartMillis;
   }
   else
   {
-    timeToStart = (timeToStartHours - hours - 1) * 60 * 60 * 1000;
-    Serial.print(timeToStartHours - hours - 1);
+    timeToStart = timeToStartMillis - millis;
   }
-  Serial.print("h ");
-
-  if(minutes > timeToStartMinutes)
-  {
-    timeToStart += (60 - minutes + timeToStartMinutes) * 60 * 1000;
-    Serial.print(60 - minutes + timeToStartMinutes);
-  }
-  else if (minutes == timeToStartMinutes)
-  {
-    Serial.print(0);
-  }
-  else
-  {
-    timeToStart += (timeToStartMinutes - minutes - 1) * 60 * 1000;
-    Serial.print(timeToStartMinutes - minutes - 1);
-  }
-  Serial.println("m");
-
+  Serial.print(timeToStart);
+  Serial.println("ms");
+  
   if(timeToStart > 3 * 60 * 1000)
   {
     // Blink LEDs
@@ -141,7 +123,7 @@ void setup()
     delay( 1 );
     
     Serial.println("Going deep sleep");
-    ESP.deepSleep(timeToStart * 1000 - 1000 * 1000 * 60 * 3);
+    ESP.deepSleep(timeToStart * 1000 - 1000 * 1000 * 60 * 2);
   }
   else
   {
